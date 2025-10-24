@@ -124,15 +124,29 @@ def add_review(request):
     else:
         return JsonResponse({"status":403,"message":"Unauthorized"})
 
+
 def get_dealer_reviews(request, dealer_id):
-    # if dealer id has been provided
-    if(dealer_id):
-        endpoint = "/fetchReviews/dealer/"+str(dealer_id)
+    if not dealer_id or dealer_id <= 0:
+        return JsonResponse({"status": 400, "message": "Invalid dealer ID"})
+    
+    try:
+        endpoint = f"/fetchReviews/dealer/{dealer_id}"
         reviews = get_request(endpoint)
+        if not reviews:
+            return JsonResponse({"status": 404, "message": "No reviews found"})
+        
         for review_detail in reviews:
-            response = analyze_review_sentiments(review_detail['review'])
-            print(response)
-            review_detail['sentiment'] = response['sentiment']
-        return JsonResponse({"status":200,"reviews":reviews})
-    else:
-        return JsonResponse({"status":400,"message":"Bad Request"})
+            try:
+                response = analyze_review_sentiments(review_detail.get('review', ''))
+                if response and 'sentiment' in response:
+                    review_detail['sentiment'] = response['sentiment']
+                else:
+                    review_detail['sentiment'] = 'unknown'  # Default fallback
+            except Exception as e:
+                logger.error(f"Sentiment analysis failed for review: {e}")
+                review_detail['sentiment'] = 'error'
+        
+        return JsonResponse({"status": 200, "reviews": reviews})
+    except Exception as e:
+        logger.error(f"Error fetching dealer reviews: {e}")
+        return JsonResponse({"status": 500, "message": "Internal server error"})
